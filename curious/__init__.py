@@ -4,8 +4,10 @@ import curio
 _request_local = curio.Local()
 
 from .errors import *
+
 from .logger import Logger
 log = Logger(_request_local)
+
 from .methods import Method
 from .request import Request
 from .response import respond

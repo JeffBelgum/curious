@@ -1,6 +1,10 @@
+from functools import partial
+import uuid
+
 import h11
 
 from .errors import *
+from .methods import Method
 from .response import respond
 
 class Router:
@@ -17,6 +21,7 @@ class Router:
 
     def add(self, rules, handler):
         """ add a new route -> handler mapping """
+        rules["path"] = PathMatcher(rules["path"])
         self.routes.append((rules, handler))
 
     def add_error(self, status_code, handler):
@@ -27,12 +32,13 @@ class Router:
         """ match against request path and return handler """
         matching_path = False
         for rules, handler in self.routes:
-            if request.path == rules["path"]:
+            (is_match, kwargs) = rules["path"].matches(request.path)
+            if is_match:
                 matching_path = True
                 if "methods" not in rules:
                     rules["methods"] = {Method.GET}
                 if request.method in rules["methods"]:
-                    return handler
+                    return partial(handler, **kwargs)
         if matching_path:
             raise MethodNotAllowed
         raise NotFound
@@ -53,3 +59,83 @@ class Router:
         else:
             return self.error_routes[500]
 
+import re
+
+class PathMatcher:
+    ident_re = r"[^\d\W]\w*"
+    type_re = r"(?:int)|(?:float)|(?:string)|(?:uuid)"
+    segment_re = re.compile(rf"^(?P<name>{ident_re})\s*:\s*(?P<type>{type_re})\Z")
+
+    int_re = r"[-+]?\d+"
+    float_re = r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?"
+    string_re = r"[^/.]+"
+    uuid_re = r"[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[89aAbB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}"
+
+    def __init__(self, raw_pattern):
+        self.raw_pattern = raw_pattern
+        self.type_map = {}
+
+        segments = []
+        current_segment = []
+        in_dynamic_segment = False
+
+        for i, c in enumerate(raw_pattern):
+            if c == "<":
+                if in_dynamic_segment:
+                    raise ValueError(f"Malformed url rule at col {i}: {raw_pattern}")
+                in_dynamic_segment = True
+                segments.append("".join(current_segment))
+                current_segment = []
+            elif c == ">":
+                if not in_dynamic_segment:
+                    raise ValueError(f"Malformed url rule at col {i}: {raw_pattern}")
+                in_dynamic_segment = False
+                segment = "".join(current_segment)
+                current_segment = []
+                print(f"matching {segment}")
+                match = self.segment_re.match(segment)
+                if match is None:
+                    raise ValueError(f"Malformed url rule at col {i-len(segment)}: {raw_pattern}")
+                segment_name = match.group("name")
+                segment_type = match.group("type")
+                if segment_type == "int":
+                    if segment_name in self.type_map:
+                        raise ValueError(f"Malformed url rule at col {i-len(segment)}: {raw_pattern} -- Cannot have duplicate identifier")
+                    self.type_map[segment_name] = int
+                    dynamic_segment = rf"(?P<{segment_name}>{self.int_re})"
+                elif segment_type == "float":
+                    if segment_name in self.type_map:
+                        raise ValueError(f"Malformed url rule at col {i-len(segment)}: {raw_pattern} -- Cannot have duplicate identifier")
+                    self.type_map[segment_name] = float
+                    dynamic_segment = rf"(?P<{segment_name}>{self.float_re})"
+                elif segment_type == "string":
+                    if segment_name in self.type_map:
+                        raise ValueError(f"Malformed url rule at col {i-len(segment)}: {raw_pattern} -- Cannot have duplicate identifier")
+                    self.type_map[segment_name] = str
+                    dynamic_segment = rf"(?P<{segment_name}>{self.string_re})"
+                elif segment_type == "uuid":
+                    if segment_name in self.type_map:
+                        raise ValueError(f"Malformed url rule at col {i-len(segment)}: {raw_pattern} -- Cannot have duplicate identifier")
+                    self.type_map[segment_name] = uuid.UUID
+                    dynamic_segment = rf"(?P<{segment_name}>{self.uuid_re})"
+                else:
+                    raise ValueError(f"Malformed url rule at col{i-len(segment)}: {raw_pattern}")
+
+                segments.append(dynamic_segment)
+            else:
+                current_segment.append(c)
+
+        # append final segment
+        if current_segment:
+            segments.append("".join(current_segment))
+
+        self.regex = re.compile(rf"^{''.join(segments)}\Z")
+        print(f"compiled regex: {self.regex}")
+
+    def matches(self, path):
+        match = self.regex.match(path)
+        if match is None:
+            return (False, None)
+        # convert stringly typed matches to specified types
+        typed_matches = {k: self.type_map[k](v) for k, v in match.groupdict().items()}
+        return (True, typed_matches)

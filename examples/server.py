@@ -2,6 +2,7 @@ import json
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
+import curio
 from curious import Web, Method, respond
 
 web = Web(__name__)
@@ -30,12 +31,15 @@ async def send_echo_response(request):
         separators=(",", ": "))
     await respond(200, "application/json; charset=utf-8", response_body)
 
-@web.route("/slow")
-async def slow(request):
-    print("slow")
-    await curio.sleep(5)
+@web.route("/slow/<s:int>")
+async def slow(request, s):
+    await curio.sleep(s)
     await respond(200, "text/plain; charset=utf-8", "gave you a slow response")
 
+@web.route("/dynamic/<i:int>/<f : float><s: string>/<u :uuid>")
+async def dynamic(request, i, f, s, u):
+    body = f"int: {i}\nfloat: {f}\nstring: {s}\nuuid: {u}"
+    await respond(200, "text/plain; charset=utf-8", body)
 
 @web.error(404)
 async def error_response(exc):
