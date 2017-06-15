@@ -4,7 +4,7 @@ import logging
 import curio
 import h11
 
-from . import _request_local, log, Request, Router
+from . import _request_local, log, Request, Router, respond, response_to_bytes
 from .transport import CurioHTTPTransport
 
 TIMEOUT = 10
@@ -19,6 +19,7 @@ class Web:
         logging.info(f"Listening on http://{host}:{port}")
         kernel.run(curio.tcp_server(host, port, self.http_serve))
 
+    # TODO modify return annotations to include status code to make mypy happy
     def route(self, path, **rules):
         def decorator(handler):
             logging.debug(f"building route {path} -> {handler.__name__}")
@@ -61,10 +62,16 @@ class Web:
                     log.info(f"Server main loop got event: {event}")
                     if type(event) is h11.Request:
                         request = Request(event)
-                        await self.router.match(request)(request)
+                        handler = self.router.match(request)
+                        status, response = await handler(request)
+                        content_type, response = response_to_bytes(handler, response)
+                        await respond(status, content_type, response)
             except Exception as exc:
                 log.info(f"Error during response handler: {exc}")
-                await self.router.match_error(exc)(exc)
+                handler = self.router.match_error(exc)
+                status, response = await handler(exc)
+                content_type, response = response_to_bytes(handler, response)
+                await respond(status, content_type, response)
 
             if transport.conn.our_state is h11.MUST_CLOSE:
                 log.info("connection is not reusable, so shutting down")
@@ -78,8 +85,9 @@ class Web:
                     states = transport.conn.states
                     log.info(f"unexpected state {states} -- bailing out")
                     exc = RuntimeError("unexpected state {}".format(states))
-                    await self.router.match_error(exc)(exc)
+                    handler = self.router.match_error(exc)
+                    status, response = await handler(exc)
+                    content_type, response = response_to_bytes(handler, response)
+                    await respond(status, content_type, response)
                     await transport.shutdown_and_clean_up()
                     return
-
-

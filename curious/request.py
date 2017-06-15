@@ -7,6 +7,8 @@ class Request:
     def __init__(self, h11_req):
         self.h11_req = h11_req
         self._method = None
+        self._headers = None
+        self._path = None
 
     @property
     def method(self):
@@ -17,12 +19,18 @@ class Request:
 
     @property
     def path(self):
-        return self.h11_req.target.decode("ascii")
+        if self._path:
+            return self._path
+        self._path = self.h11_req.target.decode("ascii")
+        return self._path
 
     @property
     def headers(self):
-        for name, value in self.h11_req.headers:
-            yield name.decode("ascii"), value.decode("ascii")
+        if self._headers:
+            return self._headers
+        self._headers = [(name.decode("ascii"), value.decode("ascii")) \
+            for name, value in self.h11_req.headers]
+        return self._headers
 
     @property
     def stream(self):

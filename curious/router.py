@@ -22,6 +22,8 @@ class Router:
     def add(self, rules, handler):
         """ add a new route -> handler mapping """
         rules["path"] = PathMatcher(rules["path"])
+        if "methods" not in rules:
+            rules["methods"] = {Method.GET}
         self.routes.append((rules, handler))
 
     def add_error(self, status_code, handler):
@@ -31,15 +33,29 @@ class Router:
     def match(self, request):
         """ match against request path and return handler """
         matching_path = False
+        matching_method = False
+
         for rules, handler in self.routes:
             (is_match, kwargs) = rules["path"].matches(request.path)
             if is_match:
                 matching_path = True
-                if "methods" not in rules:
-                    rules["methods"] = {Method.GET}
                 if request.method in rules["methods"]:
-                    return partial(handler, **kwargs)
+                    matching_method = True
+                    if "content_type" in rules:
+                        actual_type = request.headers["content-type"]
+                        if rules["content_type"] is Json:
+                            if actual_type.startswith("application/json"):
+                                curried = partial(handler, **kwargs)
+                                curried.__annotations__ = handler.__annotations__
+                                return curried
+                        # TODO other rules
+                    else:
+                        curried = partial(handler, **kwargs)
+                        curried.__annotations__ = handler.__annotations__
+                        return curried
         if matching_path:
+            if matching_method:
+                raise BadRequest
             raise MethodNotAllowed
         raise NotFound
 
@@ -92,7 +108,6 @@ class PathMatcher:
                 in_dynamic_segment = False
                 segment = "".join(current_segment)
                 current_segment = []
-                print(f"matching {segment}")
                 match = self.segment_re.match(segment)
                 if match is None:
                     raise ValueError(f"Malformed url rule at col {i-len(segment)}: {raw_pattern}")
@@ -130,7 +145,6 @@ class PathMatcher:
             segments.append("".join(current_segment))
 
         self.regex = re.compile(rf"^{''.join(segments)}\Z")
-        print(f"compiled regex: {self.regex}")
 
     def matches(self, path):
         match = self.regex.match(path)
