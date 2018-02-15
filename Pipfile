@@ -1,3 +1,20 @@
 [[source]]
+
 url = "https://pypi.python.org/simple"
 verify_ssl = true
+
+
+[packages]
+
+curio = "*"
+"h11" = "*"
+"h2" = "*"
+werkzeug = "*"
+
+
+[dev-packages]
+
+pylint = "*"
+pytest = "*"
+mypy = "*"
+isort = "*"
