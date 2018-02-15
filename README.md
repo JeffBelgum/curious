@@ -16,4 +16,29 @@ Switching to tox for development and testing would be an easy improvement to mak
 
 ## Quickstart
 
-Check out the example(s) in the `examples` directory to see how to use the library
+```python
+from curious import Web, Method, Json
+
+app = Web(__name__)
+
+# Define routes:
+
+# Echos a GET or POST request as json serialized data.
+@app.route("/echo", methods={Method.GET, Method.POST})
+async def echo(request) -> Json:
+    response_json = {
+        "method": request.method.name,
+        "path": request.path,
+        "headers": [(name, value) for (name, value) in request.headers],
+        "body": "",
+    }
+    response_json["body"] = await request.body()
+
+    return 200, response_json
+
+# Run the server
+if __name__ == "__main__":
+    app.run("localhost", 8080)
+```
+
+Check out more example(s) in the `examples` directory.
