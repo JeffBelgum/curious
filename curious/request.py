@@ -1,4 +1,5 @@
 import h11
+from werkzeug.datastructures import ImmutableOrderedMultiDict
 
 from . import _request_local
 from .methods import Method
@@ -28,8 +29,9 @@ class Request:
     def headers(self):
         if self._headers:
             return self._headers
-        self._headers = [(name.decode("ascii"), value.decode("ascii")) \
+        decoded = [(name.decode("ascii"), value.decode("ascii")) \
             for name, value in self.h11_req.headers]
+        self._headers = ImmutableOrderedMultiDict(decoded)
         return self._headers
 
     @property

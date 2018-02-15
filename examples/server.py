@@ -59,7 +59,7 @@ async def admin(request, user: User) -> str:
 @app.route("/login", methods={Method.POST}, content_type=Json)
 async def login(request) -> Json:
     """ body is guaranteed to be json """
-    body = await request.json()
+    body = json.loads(await request.body())
     return 200, body
 
 @app.route("/dynamic/<i:int>/<f : float><s: string>/<u :uuid>")

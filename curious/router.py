@@ -5,7 +5,7 @@ import h11
 
 from .errors import *
 from .methods import Method
-from .response import respond
+from .response import respond, Json
 
 class Router:
     def __init__(self):
