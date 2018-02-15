@@ -1,0 +1,5 @@
+[MESSAGES CONTROL]
+disable=fixme,wrong-import-order,ungrouped-imports
+
+[REPORTS]
+output-format=colorized
