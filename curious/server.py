@@ -4,19 +4,27 @@ Server supports http2 clear text connections with Connection: Upgrade
 Server supports http2 tls connections with ALPN
 Server does _not_ support http2 using prior knowledge
 """
+
+from functools import wraps
 import signal
+
 from curio import run, spawn, SignalQueue, CancelledError, tcp_server, socket, ssl
 from curious.connection import Connection, H11Connection, H2Connection
 import h11
 import h2
 
 from . import settings
+from .router import Router
+from .response import response_to_bytes
+from .stream import H11Stream, H2Stream
 
 class Server:
-    def __init__(self):
+    def __init__(self, name):
+        self.name = name
         self.certfile = settings.CERTFILE
         self.keyfile = settings.KEYFILE
         self.tls_ciphers = settings.TLS_CIPHERS
+        self.router = Router()
 
     def create_ssl_context(self):
         """
@@ -94,13 +102,11 @@ class Server:
         h11_conn = H11Connection(sock)
         while True:
             event = await h11_conn.next_event()
-            print(type(event), ":", event)
             if type(event) is h11.ConnectionClosed:
                 break
             if type(event) is h11.EndOfMessage:
                 break
             if type(event) is h11.Request:
-                print("Handling h11 request")
                 upgrade_settings = self.should_upgrade_to_h2(event)
                 if upgrade_settings is not None:
                     print("Upgrading to h2")
@@ -113,14 +119,24 @@ class Server:
                     print("Responding to h11 request")
                     await self.respond_to_h11(h11_conn, event)
 
-    @staticmethod
-    async def respond_to_h11(h11_conn, event):
+    async def respond_to_h11(self, h11_conn, event):
         """
         Most generic response to an h11 connection possible.
         """
-        resp = h11.Response(status_code=200, headers=h11_conn.basic_headers())
+        stream = H11Stream(event, (None,None))
+        print("stream:", stream)
+        handler = self.router.match(stream)
+        print("handler:", handler)
+        print("htype:", type(handler))
+        status, response = await handler(stream)
+        print("response:", response)
+        content_type, response = response_to_bytes(handler, response)
+        headers = h11_conn.basic_headers()
+        headers['Content-Type'] = content_type
+        headers['Content-Length'] = str(len(response))
+        resp = h11.Response(status_code=status, headers=headers)
         await h11_conn.send(resp)
-        await h11_conn.send(h11.Data(data=b'h11 hello world'))
+        await h11_conn.send(h11.Data(data=response))
         await h11_conn.send(h11.EndOfMessage())
         await h11_conn.close()
 
@@ -141,11 +157,13 @@ class Server:
             if not data:
                 print("eof")
                 break
-            print("get events")
             events = h2_conn._conn.receive_data(data)
             for event in events:
-                print("event", event)
                 if isinstance(event, h2.events.RequestReceived):
+                    stream = H2Stream(event, (None, None))
+                    print(stream)
+                    handler = self.router.match(stream)
+                    print(handler)
                     status = "200"
                     datatype = "plain/text"
                     data = b"hello world from h2"
@@ -166,10 +184,37 @@ class Server:
                             b"hello world from h2"
                         )
                         initial_h11_request = None
-            print("sending data")
             await h2_conn.sendall()
 
-    async def serve(self):
+    # TODO modify return annotations to include status code to make mypy happy
+    def route(self, path, **rules):
+        def decorator(handler):
+            print(f"building route {path} -> {handler.__name__}")
+            rules["path"] = path
+            self.router.add(rules, handler)
+            return handler
+        return decorator
+
+    # err_code doesn't really make sense as this is used
+    def error(self, status_code):
+        def decorator(handler):
+            print(f"building error handler for {status_code} -> {handler.__name__}")
+            @wraps(handler)
+            def wrapper(*args, **kwargs):
+                print("trying to send error response...")
+                if _request_local.transport.conn.our_state not in {h11.IDLE, h11.SEND_RESPONSE}:
+                    print(f"...but I can't, because our state is {_request_local.transport.conn.our_state}")
+                    return
+                try:
+                    return handler(*args, **kwargs)
+                except Exception as exc:
+                    print(f"error while sending error response: {exc}")
+
+            self.router.add_error(status_code, wrapper)
+            return wrapper
+        return decorator
+
+    async def run(self):
         """
         Main loop to spawn http and https servers and handle signal interrupts
         """

@@ -12,32 +12,12 @@ from .methods import Method
 class Stream:
     """
     A `Stream` represents a handle to the client. Data can be received and sent to the client.
-    `Stream`s abstract over the supported transport protocols and give a unified api
+    `Stream`s abstract over the supported application protocols and give a unified api
     for interacting with the concept of a stream bi-directional data stream.
     """
     def __init__(self, request, remote_addr):
-        if isinstance(request, h11.Request):
-            self._extract_h11_request(request)
-        elif isinstance(request, h2.connection.H2Connection):
-            self._extract_h2_request(request)
-        elif isinstance(request, wsproto.connection.WSConnection):
-            self._extract_h2_request(request)
-        else:
-            raise ValueError(f"Unsupported transport protocol. Request type '{type(request)}'")
-
+        self._parse_raw_request(request)
         self.remote_ip = remote_addr[0]
-
-    def _extract_h11_request(self, h11_req):
-        self._request = h11_req
-        self.method = Method.from_string(h11_req.method.decode("ascii"))
-        self._target = h11_req.target.decode("ascii")
-        parsed_url = urlparse(self._target)
-
-        self.path = parsed_url.path
-        self._raw_query = parsed_url.query
-        self._query = None
-        self._headers = None
-        self._body = None
 
     @property
     def query(self):
@@ -50,3 +30,51 @@ class Stream:
             return self._query
         self._query = ImmutableOrderedMultiDict(parse_qsl(self._raw_query))
         return self._query
+
+    def __str__(self):
+        return f"Stream({self.method}: {self.path}, {self.query}. Headers={self.headers})"
+
+class H11Stream(Stream):
+    def _parse_raw_request(self, h11_req):
+        self._request = h11_req
+        self.method = Method.from_string(h11_req.method.decode("ascii"))
+        self._target = h11_req.target.decode("ascii")
+        parsed_url = urlparse(self._target)
+
+        self.path = parsed_url.path
+        self._raw_query = parsed_url.query
+        self._raw_headers = h11_req.headers
+        self._query = None
+        self._headers = None
+        self._body = None
+
+    @property
+    def headers(self):
+        if self._headers:
+            return self._headers
+        decoded = [(name.decode("ascii"), value.decode("ascii")) \
+            for name, value in self._raw_headers]
+        self._headers = ImmutableOrderedMultiDict(decoded)
+        return self._headers
+
+class H2Stream(Stream):
+    def _parse_raw_request(self, h2_req):
+        self._request = h2_req
+        self._raw_headers = h2_req.headers
+        self._headers = None
+        self.method = self.headers[':method']
+        self._target = self.headers[':path']
+        parsed_url = urlparse(self._target)
+
+        self.path = parsed_url.path
+        self._raw_query = parsed_url.query
+        self._query = None
+        self._body = None
+
+
+    @property
+    def headers(self):
+        if self._headers:
+            return self._headers
+        self._headers = ImmutableOrderedMultiDict(self._raw_headers)
+        return self._headers

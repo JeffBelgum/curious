@@ -15,6 +15,6 @@ HTTP_PORT = 8080
 ENABLE_HTTPS = True
 HTTPS_PORT = 8081
 
-CERTFILE = "certs/bn.pem"
-KEYFILE = "certs/bn.key"
+CERTFILE = "cert/localhost.crt"
+KEYFILE = "cert/localhost.key"
 TLS_CIPHERS = "ECDHE+AESGCM"

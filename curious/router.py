@@ -1,11 +1,11 @@
 from functools import partial
+import re
 import uuid
 
 import h11
 
 from .errors import *
 from .methods import Method
-from .response import respond
 
 class Router:
     def __init__(self):
@@ -17,7 +17,8 @@ class Router:
     async def base_error_handler(self, exc):
         status_code = self.get_status_code_from_error(exc)
         body = str(exc)
-        await respond(status_code, "text/plain; charset=utf-8", body)
+        # TODO respond to uncaught exceptions
+        # await respond(status_code, "text/plain; charset=utf-8", body)
 
     def add(self, rules, handler):
         """ add a new route -> handler mapping """
@@ -74,8 +75,6 @@ class Router:
             return self.error_routes[status_code]
         else:
             return self.error_routes[500]
-
-import re
 
 class PathMatcher:
     ident_re = r"[^\d\W]\w*"

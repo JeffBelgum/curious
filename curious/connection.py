@@ -1,3 +1,8 @@
+"""
+Connections abstract over protocol state machines and async sending and receiving
+of data.
+"""
+
 from itertools import count
 from socket import SHUT_WR
 from wsgiref.handlers import format_date_time
@@ -75,7 +80,6 @@ class H2Connection(Connection):
         """
         data_to_send = self._conn.data_to_send()
         if data_to_send:
-            print("data to send")
             await self.socket.sendall(data_to_send)
 
 
@@ -103,22 +107,17 @@ class H11Connection(Connection):
 
     async def _read_from_peer(self):
         if self._conn.they_are_waiting_for_100_continue:
-            print("Sending 100 Continue")
             go_ahead = h11.InformationalResponse(status_code=100, headers=self.basic_headers())
             await self.send_h11(go_ahead)
         try:
-            print("waiting on data")
             data = await self.socket.recv(settings.MAX_RECV)
         except ConnectionError:
             data = b""
-        print("sending data to state machine")
         self._conn.receive_data(data)
 
     async def next_event(self):
         while True:
-            print("getting next event")
             event = self._conn.next_event()
-            print("Got event", event)
             if event is h11.NEED_DATA:
                 await self._read_from_peer()
                 continue
@@ -131,13 +130,10 @@ class H11Connection(Connection):
 
     async def close(self):
         await self.socket.shutdown(SHUT_WR)
-        print(self.socket)
         async with curio.ignore_after(settings.TIMEOUT_S):
             try:
                 while True:
                     data = await self.socket.recv(settings.MAX_RECV)
-                    print("DATA")
-                    print(data)
                     if not data:
                         break
             finally:

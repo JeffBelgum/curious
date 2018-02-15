@@ -1,6 +1,6 @@
 import h11
 
-from . import _request_local
+# from . import _request_local
 from .methods import Method
 
 class Request:
@@ -53,13 +53,13 @@ class DataIterator:
 
     async def __anext__(self):
         # TODO make end of message a local thing
-        if _request_local.end_of_message:
-            raise RuntimeError("Reading past end of request body")
-        while True:
-            event = await _request_local.transport.next_event()
-            if type(event) is h11.EndOfMessage:
-                _request_local.end_of_message = True
-                raise StopAsyncIteration
-            assert type(event) is h11.Data
-            # FIXME is type of data always ascii? probs not
-            return event.data.decode("ascii")
+        # if _request_local.end_of_message:
+        #     raise RuntimeError("Reading past end of request body")
+        # while True:
+        #     event = await _request_local.transport.next_event()
+        #     if type(event) is h11.EndOfMessage:
+        #         _request_local.end_of_message = True
+        #         raise StopAsyncIteration
+        #     assert type(event) is h11.Data
+        #     # FIXME is type of data always ascii? probs not
+        #     return event.data.decode("ascii")

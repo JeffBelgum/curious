@@ -2,6 +2,10 @@ import curio
 from curious.server import Server
 
 if __name__ == "__main__":
-    server = Server()
+    app = Server(__name__)
 
-    curio.run(server.serve)
+    @app.route("/a/b/c")
+    async def abc_handler(stream) -> str:
+        pass
+
+    curio.run(app.run)
