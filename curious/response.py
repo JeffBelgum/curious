@@ -40,7 +40,7 @@ def response_to_bytes(handler, response):
         if isinstance(response, (dict, tuple, list, int, float)):
             content_type = JSON_CONTENT_TYPE
             content = json.dumps(response).encode("utf-8")
-        elif isinstance(repsonse, (bytes, bytearray)):
+        elif isinstance(response, (bytes, bytearray)):
             content_type = BINARY_CONTENT_TYPE
             content = response
         else:
