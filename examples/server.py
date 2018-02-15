@@ -49,11 +49,13 @@ async def slow(request, s) -> str:
 @app.route("/admin")
 async def admin(request, user: AdminUser) -> str:
     """ guaranteed to be logged in as an administrator """
+    raise NotImplementedError("This functionality is not yet implemented")
     return 200, "admin page successfully reached"
 
 @app.route("/admin")
 async def admin(request, user: User) -> str:
     """ guaranteed to have a logged in user present """
+    raise NotImplementedError("This functionality is not yet implemented")
     return 200, "level up your user status by being cordial"
 
 @app.route("/login", methods={Method.POST}, content_type=Json)
