@@ -176,8 +176,13 @@ class Server:
         print("Server starting up")
         async with SignalQueue(signal.SIGHUP, signal.SIGINT, signal.SIGTERM) as sig:
             while True:
-                serve_http_task = await spawn(tcp_server, "localhost", 1080, self.serve_http)
-                serve_https_task = await spawn(tcp_server, "localhost", 1443, self.serve_https)
+                # Spin up tcp servers
+                if settings.ENABLE_HTTP:
+                    serve_http_task = await spawn(tcp_server, "localhost", settings.HTTP_PORT, self.serve_http)
+                if settings.ENABLE_HTTPS:
+                    serve_https_task = await spawn(tcp_server, "localhost", settings.HTTPS_PORT, self.serve_https)
+
+                # wait for signal intterupts
                 signo = await sig.get()
                 await serve_http_task.cancel()
                 await serve_https_task.cancel()
