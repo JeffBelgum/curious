@@ -19,6 +19,7 @@ Switching to tox for development and testing would be an easy improvement to mak
 ```python
 from curious import Web, Method, Json
 
+# Create new curious web app
 app = Web(__name__)
 
 # Define routes:
@@ -26,15 +27,18 @@ app = Web(__name__)
 # Echos a GET or POST request as json serialized data.
 @app.route("/echo", methods={Method.GET, Method.POST})
 async def echo(request) -> Json:
+    ordered_headers = [(name, value) for (name, value) in request.headers.items()],
+    body = await request.body()
+
     response_json = {
         "method": request.method.name,
         "path": request.path,
-        "headers": [(name, value) for (name, value) in request.headers],
-        "body": "",
+        "headers": ordered_headers,
+        "body": body,
     }
-    response_json["body"] = await request.body()
 
     return 200, response_json
+
 
 # Run the server
 if __name__ == "__main__":

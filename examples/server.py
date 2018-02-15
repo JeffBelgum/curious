@@ -22,13 +22,15 @@ app = Web(__name__)
 # should we only allow a single method per handler?
 @app.route("/echo", methods={Method.GET, Method.POST})
 async def echo(request) -> Json:
+    ordered_headers = [(name, value) for (name, value) in request.headers.items()],
+    body = await request.body()
+
     response_json = {
         "method": request.method.name,
         "path": request.path,
-        "headers": [(name, value) for (name, value) in request.headers],
-        "body": "",
+        "headers": ordered_headers,
+        "body": body,
     }
-    response_json["body"] = await request.body()
 
     return 200, response_json
 
