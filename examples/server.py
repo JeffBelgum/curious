@@ -34,9 +34,12 @@ async def echo(request) -> Json:
 
 @app.route("/stream", methods={Method.POST})
 async def stream(request) -> str:
+    total_bytes_read = 0
     async for data_chunk in request.stream:
+        total_bytes_read += len(data_chunk)
         logging.info("read %d bytes", len(data_chunk))
-    return 201, response_json
+
+    return 201, f"Streamed {total_bytes_read} bytes from your request"
 
 @app.route("/slow/<s:int>")
 async def slow(request, s) -> str:
