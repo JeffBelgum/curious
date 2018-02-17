@@ -10,6 +10,7 @@ import signal
 
 from curio import run, spawn, SignalQueue, CancelledError, tcp_server, socket, ssl
 from curious.connection import Connection, H11Connection, H2Connection
+from curious.errors import CuriousError
 import h11
 import h2
 
@@ -131,9 +132,10 @@ class Server:
         status, response = await handler(stream)
         print("response:", response)
         content_type, response = response_to_bytes(handler, response)
+        content_length = str(len(response))
         headers = h11_conn.basic_headers()
-        headers['Content-Type'] = content_type
-        headers['Content-Length'] = str(len(response))
+        headers.append(('Content-Type', content_type))
+        headers.append(('Content-Length', content_length))
         resp = h11.Response(status_code=status, headers=headers)
         await h11_conn.send(resp)
         await h11_conn.send(h11.Data(data=response))
@@ -162,7 +164,10 @@ class Server:
                 if isinstance(event, h2.events.RequestReceived):
                     stream = H2Stream(event, (None, None))
                     print(stream)
-                    handler = self.router.match(stream)
+                    try:
+                        handler = self.router.match(stream)
+                    except CuriousError as exc:
+                        handler = self.router.match_error(exc)
                     print(handler)
                     status = "200"
                     datatype = "plain/text"
@@ -202,9 +207,9 @@ class Server:
             @wraps(handler)
             def wrapper(*args, **kwargs):
                 print("trying to send error response...")
-                if _request_local.transport.conn.our_state not in {h11.IDLE, h11.SEND_RESPONSE}:
-                    print(f"...but I can't, because our state is {_request_local.transport.conn.our_state}")
-                    return
+                # if _request_local.transport.conn.our_state not in {h11.IDLE, h11.SEND_RESPONSE}:
+                #     print(f"...but I can't, because our state is {_request_local.transport.conn.our_state}")
+                #     return
                 try:
                     return handler(*args, **kwargs)
                 except Exception as exc:
