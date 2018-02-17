@@ -163,16 +163,14 @@ class Server:
             for event in events:
                 if isinstance(event, h2.events.RequestReceived):
                     stream = H2Stream(event, (None, None))
-                    print(stream)
                     try:
                         handler = self.router.match(stream)
+                        status, body = await handler(stream)
                     except CuriousError as exc:
                         handler = self.router.match_error(exc)
-                    print(handler)
-                    status = "200"
+                        status, body = await handler(exc)
                     datatype = "plain/text"
-                    data = b"hello world from h2"
-                    h2_conn.send(event.stream_id, status, datatype, data)
+                    h2_conn.send(event.stream_id, str(status), datatype, body.encode('utf-8'))
                 elif isinstance(event, h2.events.DataReceived):
                     h2_conn._conn.reset_stream(event.stream_id)
                 elif isinstance(event, h2.events.WindowUpdated):

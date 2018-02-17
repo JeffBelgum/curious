@@ -6,7 +6,7 @@ if __name__ == "__main__":
 
     @app.route("/a/b/c")
     async def abc_handler(stream) -> str:
-        pass
+        return 200, 'hello from abc handler'
 
     @app.error(404)
     async def error_response(exc):

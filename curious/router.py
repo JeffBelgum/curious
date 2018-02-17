@@ -38,22 +38,24 @@ class Router:
 
         for rules, handler in self.routes:
             (is_match, kwargs) = rules["path"].matches(request.path)
-            if is_match:
-                matching_path = True
-                if request.method in rules["methods"]:
-                    matching_method = True
-                    if "content_type" in rules:
-                        actual_type = request.headers["content-type"]
-                        if rules["content_type"] is Json:
-                            if actual_type.startswith("application/json"):
-                                curried = partial(handler, **kwargs)
-                                curried.__annotations__ = handler.__annotations__
-                                return curried
-                        # TODO other rules
-                    else:
+            if not is_match:
+                continue
+            matching_path = True
+            if request.method not in rules["methods"]:
+                continue
+            matching_method = True
+            if "content_type" in rules:
+                actual_type = request.headers["content-type"]
+                if rules["content_type"] is Json:
+                    if actual_type.startswith("application/json"):
                         curried = partial(handler, **kwargs)
                         curried.__annotations__ = handler.__annotations__
                         return curried
+                # TODO other rules
+            else:
+                curried = partial(handler, **kwargs)
+                curried.__annotations__ = handler.__annotations__
+                return curried
         if matching_path:
             if matching_method:
                 raise BadRequest
@@ -152,3 +154,6 @@ class PathMatcher:
         # convert stringly typed matches to specified types
         typed_matches = {k: self.type_map[k](v) for k, v in match.groupdict().items()}
         return (True, typed_matches)
+
+    def __str__(self):
+        return f"PathMatcher({self.regex})"

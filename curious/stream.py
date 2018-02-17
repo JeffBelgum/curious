@@ -62,7 +62,7 @@ class H2Stream(Stream):
         self._request = h2_req
         self._raw_headers = h2_req.headers
         self._headers = None
-        self.method = self.headers[':method']
+        self.method = Method.from_string(self.headers[':method'])
         self._target = self.headers[':path']
         parsed_url = urlparse(self._target)
 
