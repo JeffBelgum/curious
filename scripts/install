@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+SCRIPTS_DIR="$(dirname "$0")"
+. "${SCRIPTS_DIR}/include.sh"
+
+echo "Installing dependencies including those required for development."
+pipenv --three
+pipenv install -d
+echo "Installation complete"
+pipenv graph

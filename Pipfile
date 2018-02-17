@@ -2,6 +2,7 @@
 
 url = "https://pypi.python.org/simple"
 verify_ssl = true
+name = "pypi"
 
 
 [packages]
@@ -10,6 +11,8 @@ curio = "*"
 "h11" = "*"
 "h2" = "*"
 werkzeug = "*"
+watchdog = "*"
+wsproto = "*"
 
 
 [dev-packages]
@@ -18,3 +21,7 @@ pylint = "*"
 pytest = "*"
 mypy = "*"
 isort = "*"
+
+[requires]
+
+python_version = "3.6"

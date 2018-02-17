@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+SCRIPTS_DIR="$(dirname "$0")"
+. "${SCRIPTS_DIR}/include.sh"
+
+python_files=$(find . -path ./scripts -prune -o -name "*py" -print)
+
+printf "$python_files" | xargs -I {} bash -c 'pipenv --bare run isort {} --check || pipenv --bare run isort {}'
+printf "$python_files" | grep -v tests | xargs -I {} pipenv --bare run pylint --rcfile .pylintrc {}
+pipenv --bare run mypy --ignore-missing-imports curious
+
