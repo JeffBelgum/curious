@@ -15,7 +15,8 @@ class Stream:
     `Stream`s abstract over the supported application protocols and give a unified api
     for interacting with the concept of a stream bi-directional data stream.
     """
-    def __init__(self, request, remote_addr):
+    def __init__(self, conn, request, remote_addr):
+        self.conn = conn
         self._parse_raw_request(request)
         self.remote_ip = remote_addr[0]
 
@@ -34,6 +35,7 @@ class Stream:
     def __str__(self):
         return f"Stream({self.method}: {self.path}, {self.query}. Headers={self.headers})"
 
+
 class H11Stream(Stream):
     def _parse_raw_request(self, h11_req):
         self._request = h11_req
@@ -47,6 +49,7 @@ class H11Stream(Stream):
         self._query = None
         self._headers = None
         self._body = None
+        self._headers_sent = False
 
     @property
     def headers(self):
@@ -56,6 +59,17 @@ class H11Stream(Stream):
             for name, value in self._raw_headers]
         self._headers = ImmutableOrderedMultiDict(decoded)
         return self._headers
+
+    async def send_headers(self, status, headers):
+        if self._headers_sent:
+            raise RuntimeError("Headers already sent")
+        response = h11.Response(status_code=status, headers=headers)
+        print(type(self._request))
+        await self.conn.send(response)
+        self._headers_sent = True
+
+    async def send_data(self, data):
+        await self.conn.send(h11.Data(data=data))
 
 class H2Stream(Stream):
     def _parse_raw_request(self, h2_req):

@@ -124,24 +124,29 @@ class Server:
         """
         Most generic response to an h11 connection possible.
         """
-        stream = H11Stream(event, (None,None))
+        stream = H11Stream(h11_conn, event, (None,None))
         print("stream:", stream)
         handler = self.router.match(stream)
         print("handler:", handler)
         print("htype:", type(handler))
-        status, response = await handler(stream)
+        handler_result = await handler(stream)
+        if handler_result is not None:
+            status, response = handler_result
+        else:
+            status, response = None, None
         print("response:", response)
-        content_type, response = response_to_bytes(handler, response)
-        content_length = str(len(response))
-        headers = h11_conn.basic_headers()
-        headers.append(('Content-Type', content_type))
-        headers.append(('Content-Length', content_length))
-        resp = h11.Response(status_code=status, headers=headers)
-        await h11_conn.send(resp)
-        await h11_conn.send(h11.Data(data=response))
+        if not stream._headers_sent:
+            content_type, response = response_to_bytes(handler, response)
+            content_length = str(len(response))
+            headers = h11_conn.basic_headers()
+            headers.append(('Content-Type', content_type))
+            headers.append(('Content-Length', content_length))
+            resp = h11.Response(status_code=status, headers=headers)
+            await h11_conn.send(resp)
+        if response:
+            await h11_conn.send(h11.Data(data=response))
         await h11_conn.send(h11.EndOfMessage())
         await h11_conn.close()
-
 
     async def handle_h2(self, sock):
         """
@@ -162,7 +167,7 @@ class Server:
             events = h2_conn._conn.receive_data(data)
             for event in events:
                 if isinstance(event, h2.events.RequestReceived):
-                    stream = H2Stream(event, (None, None))
+                    stream = H2Stream(h2_conn, event, (None, None))
                     try:
                         handler = self.router.match(stream)
                         status, body = await handler(stream)
@@ -180,12 +185,15 @@ class Server:
                     #        to a message we received in h11 land and need to use a new stream id to
                     #        do it.
                     if initial_h11_request is not None:
-                        h2_conn.send(
-                            event.stream_id + 1,
-                            "200",
-                            "plain/text",
-                            b"hello world from h2"
-                        )
+                        stream = H2Stream(h2_conn, initial_h11_request, (None,None))
+                        try:
+                            handler = self.router.match(stream)
+                            status, body = await handler(stream)
+                        except CuriousError as exc:
+                            handler = self.router.match_error(exc)
+                            status, body = await handler(exc)
+                        datatype = "plain/text"
+                        h2_conn.send(event.stream_id + 1, str(status), datatype, body.encode('utf-8'))
                         initial_h11_request = None
             await h2_conn.sendall()
 
